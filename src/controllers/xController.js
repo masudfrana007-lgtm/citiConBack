@@ -90,16 +90,19 @@ const tokenRes = await fetch("https://api.twitter.com/2/oauth2/token", {
   method: "POST",
   headers: {
     "Content-Type": "application/x-www-form-urlencoded",
+    "Authorization": "Basic " + Buffer.from(
+      `${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`
+    ).toString("base64"),
   },
   body: new URLSearchParams({
     grant_type: "authorization_code",
-    client_id: process.env.X_CLIENT_ID,
-    client_secret: process.env.X_CLIENT_SECRET,
     code,
     redirect_uri: process.env.X_REDIRECT_URI,
     code_verifier: oauth.verifier,
   }),
 });
+
+
 
 // 🔴 ADD THIS
 const raw = await tokenRes.text();
