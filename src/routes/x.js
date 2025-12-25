@@ -9,6 +9,7 @@ import {
 
 const router = express.Router();
 
+router.get("/init", xInit);
 router.get("/connect", xConnect);
 router.get("/callback", xCallback);
 
