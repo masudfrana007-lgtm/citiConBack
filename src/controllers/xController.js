@@ -67,17 +67,13 @@ export const xCallback = async (req, res) => {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      Authorization:
-        "Basic " +
-        Buffer.from(
-          `${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`
-        ).toString("base64"),
     },
     body: new URLSearchParams({
       grant_type: "authorization_code",
+      client_id: process.env.X_CLIENT_ID, // ✅ REQUIRED
       code,
       redirect_uri: process.env.X_REDIRECT_URI,
-      code_verifier: session.verifier,
+      code_verifier: session.verifier,    // ✅ REQUIRED
     }),
   });
 
@@ -117,12 +113,19 @@ export const xCallback = async (req, res) => {
    STATUS
 ================================ */
 export const xStatus = async (req, res) => {
+  if (!req.session.user_id) {
+    return res.json({ connected: false });
+  }
+
   const result = await db.query(
-    `SELECT id FROM social_accounts WHERE user_id=$1 AND platform='twitter'`,
+    `SELECT id FROM social_accounts
+     WHERE user_id=$1 AND platform='twitter'`,
     [req.session.user_id]
   );
+
   res.json({ connected: result.rows.length > 0 });
 };
+
 
 /* ===============================
    POST TWEET (TEXT / MEDIA)
