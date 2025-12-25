@@ -86,25 +86,35 @@ export const xCallback = async (req, res) => {
   }
 
   // 4️⃣ Exchange code for token
-  const tokenRes = await fetch("https://api.twitter.com/2/oauth2/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: process.env.X_CLIENT_ID,
-      code,
-      redirect_uri: process.env.X_REDIRECT_URI,
-      code_verifier: oauth.verifier,
-    }),
-  });
+const tokenRes = await fetch("https://api.twitter.com/2/oauth2/token", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: process.env.X_CLIENT_ID,
+    code,
+    redirect_uri: process.env.X_REDIRECT_URI,
+    code_verifier: oauth.verifier,
+  }),
+});
 
-  const token = await tokenRes.json();
-  if (!token.access_token) {
-    console.error("X token error:", token);
-    return res.status(400).send("X auth failed");
-  }
+// 🔴 ADD THIS
+const raw = await tokenRes.text();
+console.log("🔴 RAW TOKEN RESPONSE:", raw);
+
+let token;
+try {
+  token = JSON.parse(raw);
+} catch {
+  return res.status(400).send("Invalid token JSON");
+}
+
+if (!token.access_token) {
+  return res.status(400).send("X auth failed");
+}
+
 
   // 5️⃣ Fetch X user
   const meRes = await fetch("https://api.twitter.com/2/users/me", {
