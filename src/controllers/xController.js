@@ -15,9 +15,7 @@ const sha256 = (buffer) =>
    CONNECT X (OAuth 2.0 PKCE)
 ================================ */
 export const xConnect = (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(401).send("Login required");
-  }
+  if (!req.session.user_id) return res.status(401).send("Login required");
 
   const state = crypto.randomBytes(16).toString("hex");
   const verifier = base64url(crypto.randomBytes(32));
@@ -29,13 +27,16 @@ export const xConnect = (req, res) => {
     response_type: "code",
     client_id: process.env.X_CLIENT_ID,
     redirect_uri: process.env.X_REDIRECT_URI,
-    scope: process.env.X_SCOPES,
     state,
     code_challenge: challenge,
     code_challenge_method: "S256",
   });
 
-  res.redirect(`https://twitter.com/i/oauth2/authorize?${params}`);
+  // ✅ IMPORTANT: encode scopes with %20 (space), not +
+  params.set("scope", process.env.X_SCOPES); // keep readable
+  const qs = params.toString().replace(/scope=([^&]+)/, (m, v) => `scope=${v.replace(/\+/g, "%20")}`);
+
+  res.redirect(`https://twitter.com/i/oauth2/authorize?${qs}`);
 };
 
 /* ===============================
