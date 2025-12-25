@@ -52,15 +52,16 @@ export const xConnect = (req, res) => {
 ================================ */
 export const xCallback = async (req, res) => {
   const { code, state } = req.query;
-  const session = req.session.x_oauth;
+  const oauth = req.session.x_oauth;
 
-  if (!session || state !== session.state) {
-    return res.status(400).send("Invalid state");
+  if (!oauth || oauth.state !== state) {
+    return res.status(400).send("Invalid or expired OAuth session");
   }
 
-  const userId = session.userId;
+  // ✅ TRUST THE STORED USER CONTEXT
+  const userId = oauth.userId;
   if (!userId) {
-    return res.status(401).send("Login required");
+    return res.status(400).send("OAuth user context missing");
   }
 
   const tokenRes = await fetch("https://api.twitter.com/2/oauth2/token", {
@@ -70,10 +71,10 @@ export const xCallback = async (req, res) => {
     },
     body: new URLSearchParams({
       grant_type: "authorization_code",
-      client_id: process.env.X_CLIENT_ID, // ✅ REQUIRED
+      client_id: process.env.X_CLIENT_ID,
       code,
       redirect_uri: process.env.X_REDIRECT_URI,
-      code_verifier: session.verifier,    // ✅ REQUIRED
+      code_verifier: oauth.verifier,
     }),
   });
 
@@ -83,7 +84,6 @@ export const xCallback = async (req, res) => {
     return res.status(400).send("X auth failed");
   }
 
-  // Fetch X user
   const meRes = await fetch("https://api.twitter.com/2/users/me", {
     headers: { Authorization: `Bearer ${token.access_token}` },
   });
