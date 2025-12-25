@@ -52,11 +52,7 @@ export const xConnect = (req, res) => {
     scope: process.env.X_SCOPES,
   });
 
-  res.redirect(
-    `https://twitter.com/i/oauth2/authorize?${params
-      .toString()
-      .replace(/\+/g, "%20")}`
-  );
+  res.redirect(`https://twitter.com/i/oauth2/authorize?${params.toString()}`);
 };
 
 
