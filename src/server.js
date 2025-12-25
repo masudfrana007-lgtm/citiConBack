@@ -42,6 +42,7 @@ app.use(
       secure: true,          // 🔑 HTTPS only
       httpOnly: true,
       sameSite: "none",      // 🔑 REQUIRED for OAuth popups
+      partitioned: true,
 //      domain: ".ucext.com",
 //	sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000
