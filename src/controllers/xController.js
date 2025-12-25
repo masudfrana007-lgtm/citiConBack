@@ -94,6 +94,7 @@ const tokenRes = await fetch("https://api.twitter.com/2/oauth2/token", {
   body: new URLSearchParams({
     grant_type: "authorization_code",
     client_id: process.env.X_CLIENT_ID,
+    client_secret: process.env.X_CLIENT_SECRET,
     code,
     redirect_uri: process.env.X_REDIRECT_URI,
     code_verifier: oauth.verifier,
