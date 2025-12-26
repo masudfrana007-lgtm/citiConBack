@@ -76,29 +76,58 @@ export const postInstagramMedia = async (req, res) => {
       params.append("image_url", mediaUrl);
     }
 
-    const containerRes = await fetch(containerUrl + "?" + params.toString(), { method: "POST" });
-    const containerData = await containerRes.json();
+// Poll until container creation succeeds and returns id
+    const startTime = Date.now();
+    let creationId = null;
+    const pollInterval = 2000; // 2 seconds
 
-    if (containerData.error) {
-      return res.status(400).json({ error: "Container failed", details: containerData.error });
+    while (!creationId) {
+      try {
+        const containerRes = await fetch(containerUrl + "?" + params.toString(), { method: "POST" });
+        const containerData = await containerRes.json();
+
+        if (containerData.id) {
+          creationId = containerData.id;
+          const timeTaken = ((Date.now() - startTime) / 1000).toFixed(1);
+          console.log(`Instagram container created after ${timeTaken}s: ${creationId}`);
+        } else if (containerData.error) {
+          console.log(`Container not ready or error: ${containerData.error.message} — retrying...`);
+        } else {
+          console.log(`Container not ready yet (no id) — polling again in ${pollInterval / 1000}s`);
+        }
+      } catch (err) {
+        console.error("Error creating container:", err);
+      }
+
+      if (!creationId) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
     }
 
+    // Now publish
     const publishRes = await fetch(`https://graph.facebook.com/v19.0/${igId}/media_publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        creation_id: containerData.id,
+        creation_id: creationId,
         access_token: token
       })
     });
     const publishData = await publishRes.json();
 
+    if (publishData.error) {
+      console.error("Publish failed:", publishData.error);
+      return res.status(400).json({ error: "Publish failed", details: publishData.error });
+    }
+
+    console.log("Instagram post published:", publishData.id);
     res.json(publishData);
   } catch (err) {
     console.error("Instagram post error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
+
 
 // Optional: logout clears only Instagram sub-accounts
 export const instagramLogout = async (req, res) => {
