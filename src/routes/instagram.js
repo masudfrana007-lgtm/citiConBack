@@ -1,12 +1,15 @@
+// routes/instagram.js
 import express from "express";
 import {
-  syncInstagramAccounts,
-  postToInstagram
+  instagramStatus,
+  getInstagramAccounts,
+  instagramLogout
 } from "../controllers/instagramController.js";
 
 const router = express.Router();
 
-router.post("/sync", syncInstagramAccounts);
-router.post("/post", postToInstagram);
+router.get("/status", instagramStatus);
+router.get("/accounts", getInstagramAccounts);
+router.post("/logout", instagramLogout);
 
 export default router;
