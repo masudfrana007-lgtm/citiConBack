@@ -166,9 +166,40 @@ export const xSaveToken = async (req, res) => {
 //     </script>
 //   `);
 // };
-export const xCallback = () => {
-};
+export const xCallback = (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>X Authentication</title>
+    </head>
+    <body>
+      <script>
+        // Extract parameters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
+        const error = urlParams.get('error');
 
+        // Send everything back to the parent window immediately
+        if (window.opener) {
+          window.opener.postMessage({
+            type: "x_oauth_callback",
+            code: code,
+            state: state,
+            error: error
+          }, "https://ucext.com");  // Important: specify your domain
+
+          window.close();
+        } else {
+          // Fallback if popup was blocked or opened in new tab
+          document.body.innerHTML = "<p>Authentication complete. You can close this window.</p>";
+        }
+      </script>
+    </body>
+    </html>
+  `);
+};
 
 /* ===============================
    STATUS
