@@ -170,7 +170,7 @@ export const xCallback = (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
-    <head><title>X Auth Callback</title></head>
+    <head><title>X Auth</title></head>
     <body>
       <script>
         const params = new URLSearchParams(window.location.search);
@@ -178,20 +178,23 @@ export const xCallback = (req, res) => {
         const state = params.get("state");
         const error = params.get("error");
 
-        // Retrieve state from sessionStorage (set by parent window)
-        const storedState = sessionStorage.getItem("x_pkce_state");
-
-        if (error || !code || state !== storedState) {
-          window.opener.postMessage({ type: "x_auth_error", error: error || "State mismatch" }, "*");
-        } else {
-          window.opener.postMessage({ type: "x_auth_success", code: code }, "*");
+        // Always send whatever we got — parent will validate state
+        if (window.opener) {
+          window.opener.postMessage({
+            type: error ? "x_auth_error" : "x_auth_success",
+            code: code || null,
+            state: state || null,
+            error: error || null
+          }, "*");  // In production, replace "*" with your origin: "https://ucext.com"
         }
+
         window.close();
       </script>
     </body>
     </html>
   `);
 };
+
 
 /* ===============================
    STATUS
