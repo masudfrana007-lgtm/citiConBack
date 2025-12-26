@@ -277,21 +277,25 @@ export const facebookPostMedia = async (req, res) => {
   }
 
 // Get direct media URL
-let directMediaUrl = null;
+let directMediaUrl = `https://www.facebook.com/${data.id}`; // fallback
 try {
   const detailsRes = await fetch(
-    `https://graph.facebook.com/v19.0/${data.id}?fields=full_picture,source,permalink_url`,
+    `https://graph.facebook.com/v19.0/${data.id}?fields=source`,
     {
       headers: { Authorization: `Bearer ${page.rows[0].token}` }
     }
   );
   const details = await detailsRes.json();
-  directMediaUrl = details;
+  directMediaUrl = details.source || directMediaUrl;
 } catch (err) {
   console.error("Failed to get direct media URL:", err);
-  directMediaUrl = `https://www.facebook.com/${data.id}`; // fallback
 }
 
+res.json({
+  id: data.id,
+  permalink: `https://www.facebook.com/${data.id}`,
+  mediaUrl: directMediaUrl  // Instagram uses this
+});
   // Save to DB (optional but recommended)
   /*
   try {
@@ -312,12 +316,7 @@ try {
     console.error("Failed to save post to DB:", err);
   }
 */
-  res.json({
-    id: data.id,
-    permalink: `https://www.facebook.com/${data.id}`,
-    mediaUrl: directMediaUrl // ← this is what Instagram needs
-  });
-  
+
 };
 
 /**
