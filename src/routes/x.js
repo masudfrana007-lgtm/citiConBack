@@ -1,6 +1,5 @@
 import express from "express";
 import {
-  xSaveToken,
   xInit,
   xConnect,
   xCallback,
@@ -15,7 +14,6 @@ router.get("/init", xInit);
 router.get("/connect", xConnect);
 router.get("/callback", xCallback);
 
-router.post("/save-token", xSaveToken);
 router.get("/status", xStatus);
 router.post("/post", postToX);
 router.post("/logout", xLogout);
