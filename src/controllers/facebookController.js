@@ -277,24 +277,47 @@ export const facebookPostMedia = async (req, res) => {
   }
 
 // Get direct media URL
-let directMediaUrl = `https://www.facebook.com/${data.id}`; // fallback
-try {
-  const detailsRes = await fetch(
-    `https://graph.facebook.com/v19.0/${data.id}?fields=source`,
-    {
-      headers: { Authorization: `Bearer ${page.rows[0].token}` }
-    }
-  );
-  const details = await detailsRes.json();
-  directMediaUrl = details;
-} catch (err) {
-  console.error("Failed to get direct media URL:", err);
-}
+const startTime = Date.now();
+let directMediaUrl = null;
+let mediaDetails = null;
+const pollInterval = 2000; // 2 seconds
 
+while (!directMediaUrl) {
+  try {
+    const detailsRes = await fetch(
+      `https://graph.facebook.com/v19.0/${data.id}?fields=source`,
+      {
+        headers: { Authorization: `Bearer ${page.rows[0].token}` }
+      }
+    );
+    const details = await detailsRes.json();
+
+    if (details.source) {
+      directMediaUrl = details.source;
+      const timeTaken = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`Got source URL after ${timeTaken}s: ${directMediaUrl}`);
+
+      // Add timeTaken to the details object
+      mediaDetails = {
+        ...details,
+        timeTakenSeconds: timeTaken
+      };
+    } else {
+      console.log(`Source not ready yet... polling again in ${pollInterval / 1000}s`);
+    }
+  } catch (err) {
+    console.error("Error polling for source:", err);
+  }
+
+  if (!directMediaUrl) {
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+  }
+}
 res.json({
   id: data.id,
   permalink: `https://www.facebook.com/${data.id}`,
-  mediaUrl: directMediaUrl  // Instagram uses this
+  mediaUrl: directMediaUrl,  // Instagram uses this
+  mediaDetails: mediaDetails
 });
   // Save to DB (optional but recommended)
   /*
