@@ -276,20 +276,21 @@ export const facebookPostMedia = async (req, res) => {
     return res.status(400).json({ error: "Facebook upload failed", details: data });
   }
 
-  // Get permalink (public URL)
-  let permalink = `https://facebook.com/${data.id}`; // fallback
-  try {
-    const postRes = await fetch(
-      `https://graph.facebook.com/v19.0/${data.id}?fields=permalink_url`,
-      {
-        headers: { Authorization: `Bearer ${page.rows[0].token}` }
-      }
-    );
-    const postData = await postRes.json();
-    permalink = postData.permalink_url || permalink;
-  } catch (err) {
-    console.error("Failed to get permalink:", err);
-  }
+// Get direct media URL
+let directMediaUrl = null;
+try {
+  const detailsRes = await fetch(
+    `https://graph.facebook.com/v19.0/${data.id}?fields=full_picture,source,permalink_url`,
+    {
+      headers: { Authorization: `Bearer ${page.rows[0].token}` }
+    }
+  );
+  const details = await detailsRes.json();
+  directMediaUrl = details.full_picture || details.source || details.permalink_url;
+} catch (err) {
+  console.error("Failed to get direct media URL:", err);
+  directMediaUrl = `https://www.facebook.com/${data.id}`; // fallback
+}
 
   // Save to DB (optional but recommended)
   /*
@@ -311,8 +312,12 @@ export const facebookPostMedia = async (req, res) => {
     console.error("Failed to save post to DB:", err);
   }
 */
-  res.json({ ...data, permalink }); // Send back to frontend
-  return { postId: data.id, mediaUrl: permalink };
+  res.json({
+    id: data.id,
+    permalink: `https://www.facebook.com/${data.id}`,
+    mediaUrl: directMediaUrl // ← this is what Instagram needs
+  });
+  
 };
 
 /**
