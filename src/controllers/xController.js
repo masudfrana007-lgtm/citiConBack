@@ -178,17 +178,19 @@ export const xCallback = (req, res) => {
         const state = params.get("state");
         const error = params.get("error");
 
-        // Always send whatever we got — parent will validate state
+        // Blindly forward everything to parent — parent will validate
         if (window.opener) {
           window.opener.postMessage({
-            type: error ? "x_auth_error" : "x_auth_success",
+            type: "x_oauth_callback",
             code: code || null,
             state: state || null,
             error: error || null
-          }, "*");  // In production, replace "*" with your origin: "https://ucext.com"
-        }
+          }, "https://ucext.com");  // ← IMPORTANT: specify origin, not "*"
 
-        window.close();
+          window.close();
+        } else {
+          document.body.innerHTML = "<p>Authentication complete. You can close this window.</p>";
+        }
       </script>
     </body>
     </html>
