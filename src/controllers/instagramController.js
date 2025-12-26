@@ -49,10 +49,10 @@ export const getInstagramAccounts = async (req, res) => {
 };
 
 export const postInstagramMedia = async (req, res) => {
-  const { caption, igId } = req.body;
-  const file = req.file;
+  const { caption, igId, mediaUrl } = req.body; // Add mediaUrl param
 
   if (!igId) return res.status(400).json({ error: "No Instagram account selected" });
+  if (!mediaUrl) return res.status(400).json({ error: "Media URL required" });
 
   try {
     const acc = await db.query(
@@ -60,37 +60,30 @@ export const postInstagramMedia = async (req, res) => {
       [igId]
     );
     if (!acc.rows.length) return res.status(400).json({ error: "Instagram account not found" });
-
     const token = acc.rows[0].token;
 
-    // Step 1: Create media container
     const containerUrl = `https://graph.facebook.com/v19.0/${igId}/media`;
-    const form = new FormData();
-    form.append("access_token", token);
-    form.append("caption", caption || "");
+    const params = new URLSearchParams({
+      access_token: token,
+      caption: caption || "",
+    });
 
-    if (file) {
-        const mediaType = file.mimetype.startsWith("video/") ? "REELS" : "IMAGE";
-        form.append("media_type", mediaType);
-        form.append("source", file.buffer, { 
-          filename: file.originalname,
-          contentType: file.mimetype 
-        });
+    const isVideo = mediaUrl.toLowerCase().includes(".mp4");
+    if (isVideo) {
+      params.append("video_url", mediaUrl);
+      params.append("media_type", "REELS");
     } else {
-      return res.status(400).json({ error: "Media file required for Instagram" });
+      params.append("image_url", mediaUrl);
     }
 
-    const containerRes = await fetch(containerUrl, { method: "POST", body: form });
+    const containerRes = await fetch(containerUrl + "?" + params.toString(), { method: "POST" });
     const containerData = await containerRes.json();
 
-    if (!containerData.id) {
-      console.error("IG container error:", containerData);
-      return res.status(400).json({ error: "Failed to create post container", details: containerData });
+    if (containerData.error) {
+      return res.status(400).json({ error: "Container failed", details: containerData.error });
     }
 
-    // Step 2: Publish
-    const publishUrl = `https://graph.facebook.com/v19.0/${igId}/media_publish`;
-    const publishRes = await fetch(publishUrl, {
+    const publishRes = await fetch(`https://graph.facebook.com/v19.0/${igId}/media_publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -103,7 +96,7 @@ export const postInstagramMedia = async (req, res) => {
     res.json(publishData);
   } catch (err) {
     console.error("Instagram post error:", err);
-    res.status(500).json({ error: "Instagram post failed" });
+    res.status(500).json({ error: "Server error" });
   }
 };
 

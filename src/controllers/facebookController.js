@@ -169,7 +169,7 @@ export const facebookCallback = async (req, res) => {
       console.error(`Error fetching IG for page ${page.id}:`, err);
     }
   }
-  
+
   // 8️⃣ Close popup
   res.send(`
     <script>
@@ -269,7 +269,50 @@ export const facebookPostMedia = async (req, res) => {
     : `https://graph.facebook.com/v19.0/${pageId}/photos`;
 
   const fbRes = await fetch(endpoint, { method: "POST", body: form });
-  res.json(await fbRes.json());
+  const data = await fbRes.json();
+
+  if (!data.id) {
+    console.error("Facebook media upload failed:", data);
+    return res.status(400).json({ error: "Facebook upload failed", details: data });
+  }
+
+  // Get permalink (public URL)
+  let permalink = `https://facebook.com/${data.id}`; // fallback
+  try {
+    const postRes = await fetch(
+      `https://graph.facebook.com/v19.0/${data.id}?fields=permalink_url`,
+      {
+        headers: { Authorization: `Bearer ${page.rows[0].token}` }
+      }
+    );
+    const postData = await postRes.json();
+    permalink = postData.permalink_url || permalink;
+  } catch (err) {
+    console.error("Failed to get permalink:", err);
+  }
+
+  // Save to DB (optional but recommended)
+  /*
+  try {
+    await fetch("/post/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        platform: "facebook",
+        sub_account_id: pageId,
+        caption: caption || "",
+        media_url: permalink,
+        post_id: data.id,
+        response_json: data
+      })
+    });
+  } catch (err) {
+    console.error("Failed to save post to DB:", err);
+  }
+*/
+  res.json({ ...data, permalink }); // Send back to frontend
+  return { postId: data.id, mediaUrl: permalink };
 };
 
 /**
