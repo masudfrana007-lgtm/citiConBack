@@ -166,35 +166,7 @@ export const xSaveToken = async (req, res) => {
 //     </script>
 //   `);
 // };
-export const xCallback = (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head><title>X Auth</title></head>
-    <body>
-      <script>
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get("code");
-        const state = params.get("state");
-        const error = params.get("error");
-
-        // Blindly forward everything to parent — parent will validate
-        if (window.opener) {
-          window.opener.postMessage({
-            type: "x_oauth_callback",
-            code: code || null,
-            state: state || null,
-            error: error || null
-          }, "https://ucext.com");  // ← IMPORTANT: specify origin, not "*"
-
-          window.close();
-        } else {
-          document.body.innerHTML = "<p>Authentication complete. You can close this window.</p>";
-        }
-      </script>
-    </body>
-    </html>
-  `);
+export const xCallback = () => {
 };
 
 
