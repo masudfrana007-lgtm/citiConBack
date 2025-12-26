@@ -286,7 +286,7 @@ try {
     }
   );
   const details = await detailsRes.json();
-  directMediaUrl = details.full_picture || details.source || details.permalink_url;
+  directMediaUrl = details;
 } catch (err) {
   console.error("Failed to get direct media URL:", err);
   directMediaUrl = `https://www.facebook.com/${data.id}`; // fallback
