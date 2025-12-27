@@ -99,7 +99,9 @@ export const postInstagramMedia = async (req, res) => {
 
     const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     uploadedFilePath = path.join(uploadDir, filename);
-    fs.writeFileSync(uploadedFilePath, file.buffer);
+    // fs.writeFileSync(uploadedFilePath, file.buffer);
+    // In instagramController.js, after writing the file:
+    fs.writeFileSync(uploadedFilePath, file.buffer, { mode: 0o644 });
 
     const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
     const isVideo = file.mimetype.startsWith("video/");
