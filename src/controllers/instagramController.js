@@ -119,10 +119,10 @@ export const postInstagramMedia = async (req, res) => {
 
     // ✅ FIX: Use correct parameter based on media type
     if (isVideo) {
-      params.append("media_type", "VIDEO");
+      params.append("media_type", "REELS");
       params.append("video_url", publicMediaUrl);
     } else {
-      params.append("media_type", "IMAGE");
+//      params.append("media_type", "IMAGE");
       params.append("image_url", publicMediaUrl);
     }
 
