@@ -206,7 +206,7 @@ send("file", {
         return res.end();
       }
 
-      if (Date.now() - start > 120000) {
+      if (Date.now() - start > 1200000) {
         send("processing", {
           status: "error",
           error: "Processing timeout"
