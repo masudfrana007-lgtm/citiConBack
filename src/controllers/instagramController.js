@@ -55,22 +55,43 @@ export const postInstagramMedia = async (req, res) => {
   const { caption = "", igId } = req.body;
   const file = req.file;
 
-  if (!igId) return res.status(400).json({ error: "No Instagram account selected" });
-  if (!file) return res.status(400).json({ error: "Media file required" });
+  const steps = {
+    token: null,
+    file: null,
+    container: null,
+    processing: [],
+    publish: null,
+    cleanup: null
+  };
 
   let uploadedFilePath = null;
 
   try {
-    // 1. Get token
+    // STEP 1 — TOKEN
+    if (!igId) {
+      steps.token = { success: false, error: "No Instagram account selected" };
+      return res.status(400).json({ steps });
+    }
+
     const acc = await db.query(
       `SELECT token FROM social_sub_accounts WHERE sub_id = $1 AND type = 'instagram_account'`,
       [igId]
     );
-    if (!acc.rows.length) throw new Error("Instagram account not found");
+
+    if (!acc.rows.length) {
+      steps.token = { success: false, error: "Instagram account not found" };
+      throw new Error("Instagram account not found");
+    }
 
     const token = acc.rows[0].token;
+    steps.token = { success: true, token };
 
-    // 2. Save file
+    // STEP 2 — FILE SAVE
+    if (!file) {
+      steps.file = { success: false, error: "Media file required" };
+      throw new Error("Media file required");
+    }
+
     const uploadDir = path.join(process.cwd(), "public/uploads");
     fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -81,7 +102,14 @@ export const postInstagramMedia = async (req, res) => {
     const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
     const isVideo = file.mimetype.startsWith("video/");
 
-    // 3. Create container
+    steps.file = {
+      success: true,
+      filename,
+      url: publicMediaUrl,
+      type: file.mimetype
+    };
+
+    // STEP 3 — CREATE CONTAINER
     const params = new URLSearchParams({
       access_token: token,
       caption
@@ -89,7 +117,6 @@ export const postInstagramMedia = async (req, res) => {
 
     if (isVideo) {
       params.append("video_url", publicMediaUrl);
-      params.append("media_type", "REELS");
     } else {
       params.append("image_url", publicMediaUrl);
     }
@@ -100,11 +127,16 @@ export const postInstagramMedia = async (req, res) => {
     );
 
     const createData = await createRes.json();
-    if (!createData.id) throw new Error(createData.error?.message);
+
+    if (!createData.id) {
+      steps.container = { success: false, response: createData };
+      throw new Error(createData.error?.message || "Container creation failed");
+    }
 
     const creationId = createData.id;
+    steps.container = { success: true, creationId };
 
-    // 4. Poll status
+    // STEP 4 — PROCESSING
     let status = "IN_PROGRESS";
     const start = Date.now();
 
@@ -112,16 +144,28 @@ export const postInstagramMedia = async (req, res) => {
       await new Promise(r => setTimeout(r, 2000));
 
       const sRes = await fetch(
-        `https://graph.facebook.com/v19.0/${creationId}?fields=status_code&access_token=${token}`
+        `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,status,error_message&access_token=${token}`
       );
-      const sData = await sRes.json();
 
+      const sData = await sRes.json();
       status = sData.status_code;
-      if (status === "ERROR") throw new Error("Instagram processing failed");
-      if (Date.now() - start > 60000) throw new Error("Instagram timeout");
+
+      steps.processing.push({
+        time: new Date().toISOString(),
+        status: sData.status_code,
+        error: sData.error_message || null
+      });
+
+      if (status === "ERROR") {
+        throw new Error(sData.error_message || "Instagram processing failed");
+      }
+
+      if (Date.now() - start > 60000) {
+        throw new Error("Instagram processing timeout");
+      }
     }
 
-    // 5. Publish
+    // STEP 5 — PUBLISH
     const publishRes = await fetch(
       `https://graph.facebook.com/v19.0/${igId}/media_publish`,
       {
@@ -134,20 +178,40 @@ export const postInstagramMedia = async (req, res) => {
     );
 
     const publishData = await publishRes.json();
-    if (publishData.error) throw new Error(publishData.error.message);
 
-    // 6. Cleanup
+    if (publishData.error) {
+      steps.publish = { success: false, response: publishData };
+      throw new Error(publishData.error.message);
+    }
+
+    steps.publish = {
+      success: true,
+      mediaId: publishData.id
+    };
+
+    // STEP 6 — CLEANUP
     fs.unlinkSync(uploadedFilePath);
+    steps.cleanup = { success: true };
 
-    res.json(publishData);
+    res.json({
+      success: true,
+      steps
+    });
 
   } catch (err) {
     if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
       fs.unlinkSync(uploadedFilePath);
+      steps.cleanup = { success: true, note: "Deleted after failure" };
     }
-    res.status(500).json({ error: "Instagram post failed", message: err.message });
+
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      steps
+    });
   }
 };
+
 
 
 // Optional: logout clears only Instagram sub-accounts
