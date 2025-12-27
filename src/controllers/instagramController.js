@@ -211,11 +211,12 @@ export const postInstagramMedia = async (req, res) => {
 
   } catch (err) {
     // Cleanup on error
+    /*
     if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
       fs.unlinkSync(uploadedFilePath);
       steps.cleanup = { success: true, note: "Deleted after failure" };
     }
-
+*/
     res.status(500).json({
       success: false,
       error: err.message,
