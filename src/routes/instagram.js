@@ -14,6 +14,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.get("/status", instagramStatus);
 router.get("/accounts", getInstagramAccounts);
 router.post("/logout", instagramLogout);
-router.post("/media", postInstagramMedia); // Remove upload.single("file")
+router.post("/media", upload.single("file"), postInstagramMedia); // Remove upload.single("file")
 
 export default router;

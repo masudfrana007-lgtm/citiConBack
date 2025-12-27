@@ -57,6 +57,8 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
+
 // Routes
 app.use("/auth", authRoutes);
 app.use("/drive", driveRoutes);
