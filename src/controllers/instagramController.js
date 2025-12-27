@@ -122,7 +122,7 @@ export const postInstagramMedia = async (req, res) => {
       params.append("media_type", "REELS");
       params.append("video_url", publicMediaUrl);
     } else {
-//      params.append("media_type", "IMAGE");
+      params.append("media_type", "IMAGE");
       params.append("image_url", publicMediaUrl);
     }
 
