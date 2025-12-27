@@ -57,74 +57,96 @@ export const postInstagramMedia = async (req, res) => {
   const { caption = "", igId } = req.body;
   const file = req.file;
 
-  const steps = {
-    token: null,
-    file: null,
-    container: null,
-    publish: null,
-    cleanup: null
-  };
-
   let uploadedFilePath = null;
+
+  // 🔴 SSE HEADERS
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const send = (step, payload = {}) => {
+    res.write(`data: ${JSON.stringify({ step, ...payload })}\n\n`);
+  };
 
   try {
     // ===============================
     // STEP 1 — TOKEN
     // ===============================
-    if (!igId) {
-      return res.status(400).json({
-        success: false,
-        error: "No Instagram account selected"
-      });
-    }
+    send("token", { status: "pending" });
 
     const acc = await db.query(
-      `SELECT token FROM social_sub_accounts 
-       WHERE sub_id = $1 AND type = 'instagram_account'`,
+      `SELECT token FROM social_sub_accounts WHERE sub_id = $1 AND type = 'instagram_account'`,
       [igId]
     );
 
     if (!acc.rows.length) {
-      return res.status(400).json({
-        success: false,
-        error: "Instagram account not found"
-      });
+      send("token", { status: "error", error: "Instagram account not found" });
+      return res.end();
     }
 
     const token = acc.rows[0].token;
-    steps.token = { success: true };
+    send("token", { status: "success" });
 
     // ===============================
     // STEP 2 — FILE SAVE
     // ===============================
-    if (!file) {
-      return res.status(400).json({
-        success: false,
-        error: "Media file required"
-      });
-    }
+    // send("file", { status: "pending" });
 
-    const uploadDir = path.join(process.cwd(), "public/uploads");
-    fs.mkdirSync(uploadDir, { recursive: true });
+    // const uploadDir = path.join(process.cwd(), "public/uploads");
+    // fs.mkdirSync(uploadDir, { recursive: true });
 
-    const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-    uploadedFilePath = path.join(uploadDir, filename);
+    // const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    // uploadedFilePath = path.join(uploadDir, filename);
+    // fs.writeFileSync(uploadedFilePath, file.buffer, { mode: 0o644 });
 
-    fs.writeFileSync(uploadedFilePath, file.buffer, { mode: 0o644 });
+    // const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
+    // const isVideo = file.mimetype.startsWith("video/");
 
-    const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
-    const isVideo = file.mimetype.startsWith("video/");
+    // send("file", {
+    //   status: "success",
+    //   filename,
+    //   url: publicMediaUrl
+    // });
 
-    steps.file = {
-      success: true,
-      filename,
-      url: publicMediaUrl,
-      type: file.mimetype
-    };
+// ===============================
+// STEP 2 — USE EXISTING SERVER FILE (TEMP TEST)
+// ===============================
+send("file", { status: "pending" });
+
+// ⚠️ CHANGE THIS TO ONE OF YOUR EXISTING FILES
+const filename = "1766831008451-image.jpg";
+
+const uploadedFilePath = path.join(
+  process.cwd(),
+  "public/uploads",
+  filename
+);
+
+if (!fs.existsSync(uploadedFilePath)) {
+  send("file", {
+    status: "error",
+    error: "Test file not found on server"
+  });
+  return res.end();
+}
+
+const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
+const isVideo = false;
+
+send("file", {
+  status: "success",
+  filename,
+  url: publicMediaUrl,
+  note: "Using existing server file"
+});
+
+
 
     // ===============================
     // STEP 3 — CREATE CONTAINER
     // ===============================
+    send("container", { status: "pending" });
+
     const params = new URLSearchParams({
       access_token: token,
       caption
@@ -146,95 +168,103 @@ export const postInstagramMedia = async (req, res) => {
     const createData = await createRes.json();
 
     if (!createData.id) {
-      return res.status(500).json({
-        success: false,
-        error: createData.error?.message || "Instagram container creation failed",
-        response: createData
+      send("container", {
+        status: "error",
+        error: createData.error?.message
       });
+      return res.end();
     }
 
     const creationId = createData.id;
-    steps.container = { success: true, creationId };
+    send("container", { status: "success", creationId });
 
     // ===============================
-    // RESPOND IMMEDIATELY (NO BLOCKING)
+    // STEP 4 — PROCESSING
     // ===============================
-    res.json({
-      success: true,
-      steps,
-      creationId,
-      note: "Instagram processing started"
+    send("processing", { status: "pending" });
+
+    let status = "IN_PROGRESS";
+    const start = Date.now();
+
+    while (status !== "FINISHED") {
+      await new Promise(r => setTimeout(r, 3000));
+
+      const sRes = await fetch(
+        `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,error_message&access_token=${token}`
+      );
+
+      const sData = await sRes.json();
+      status = sData.status_code;
+
+      send("processing", { status });
+
+      if (status === "ERROR") {
+        send("processing", {
+          status: "error",
+          error: sData.error_message
+        });
+        return res.end();
+      }
+
+      if (Date.now() - start > 120000) {
+        send("processing", {
+          status: "error",
+          error: "Processing timeout"
+        });
+        return res.end();
+      }
+    }
+
+    // ===============================
+    // STEP 5 — PUBLISH
+    // ===============================
+    send("publish", { status: "pending" });
+
+    const publishRes = await fetch(
+      `https://graph.facebook.com/v19.0/${igId}/media_publish`,
+      {
+        method: "POST",
+        body: new URLSearchParams({
+          creation_id: creationId,
+          access_token: token
+        })
+      }
+    );
+
+    const publishData = await publishRes.json();
+
+    if (publishData.error) {
+      send("publish", {
+        status: "error",
+        error: publishData.error.message
+      });
+      return res.end();
+    }
+
+    send("publish", {
+      status: "success",
+      mediaId: publishData.id
     });
 
     // ===============================
-    // BACKGROUND JOB (PROCESS + PUBLISH)
+    // STEP 6 — CLEANUP
     // ===============================
-    (async () => {
-      try {
-        let status = "IN_PROGRESS";
-        const start = Date.now();
+    if (fs.existsSync(uploadedFilePath)) {
+      fs.unlinkSync(uploadedFilePath);
+    }
 
-        while (status !== "FINISHED") {
-          await new Promise(r => setTimeout(r, 3000));
+    send("cleanup", { status: "success" });
 
-          const sRes = await fetch(
-            `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,error_message&access_token=${token}`
-          );
-
-          const sData = await sRes.json();
-          status = sData.status_code;
-
-          if (status === "ERROR") {
-            throw new Error(sData.error_message || "Instagram processing failed");
-          }
-
-          if (Date.now() - start > 120000) {
-            throw new Error("Instagram processing timeout");
-          }
-        }
-
-        // ===============================
-        // PUBLISH (ONLY AFTER FINISHED)
-        // ===============================
-        const publishRes = await fetch(
-          `https://graph.facebook.com/v19.0/${igId}/media_publish`,
-          {
-            method: "POST",
-            body: new URLSearchParams({
-              creation_id: creationId,
-              access_token: token
-            })
-          }
-        );
-
-        const publishData = await publishRes.json();
-
-        if (publishData.error) {
-          throw new Error(publishData.error.message);
-        }
-
-        // ===============================
-        // CLEANUP FILE (AFTER SUCCESS)
-        // ===============================
-        setTimeout(() => {
-          if (fs.existsSync(uploadedFilePath)) {
-            fs.unlinkSync(uploadedFilePath);
-          }
-        }, 300000);
-
-      } catch (err) {
-        console.error("Instagram background job failed:", err.message);
-      }
-    })();
+    // ✅ DONE
+    send("done", { success: true });
+    res.end();
 
   } catch (err) {
-    console.error("Instagram post error:", err.message);
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    send("fatal", { error: err.message });
+    res.end();
   }
 };
+
 
 
 
