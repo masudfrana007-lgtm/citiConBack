@@ -87,57 +87,36 @@ export const postInstagramMedia = async (req, res) => {
     const token = acc.rows[0].token;
     send("token", { status: "success" });
 
-    // ===============================
-    // STEP 2 — FILE SAVE
-    // ===============================
-    // send("file", { status: "pending" });
-
-    // const uploadDir = path.join(process.cwd(), "public/uploads");
-    // fs.mkdirSync(uploadDir, { recursive: true });
-
-    // const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-    // uploadedFilePath = path.join(uploadDir, filename);
-    // fs.writeFileSync(uploadedFilePath, file.buffer, { mode: 0o644 });
-
-    // const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
-    // const isVideo = file.mimetype.startsWith("video/");
-
-    // send("file", {
-    //   status: "success",
-    //   filename,
-    //   url: publicMediaUrl
-    // });
-
 // ===============================
-// STEP 2 — USE EXISTING SERVER FILE (TEMP TEST)
+// STEP 2 — SAVE UPLOADED FILE
 // ===============================
 send("file", { status: "pending" });
 
-// ⚠️ CHANGE THIS TO ONE OF YOUR EXISTING FILES
-const filename = "1766831008451-image.jpg";
-
-const uploadedFilePath = path.join(
-  process.cwd(),
-  "public/uploads",
-  filename
-);
-
-if (!fs.existsSync(uploadedFilePath)) {
+if (!file) {
   send("file", {
     status: "error",
-    error: "Test file not found on server"
+    error: "No file uploaded"
   });
   return res.end();
 }
 
+const uploadDir = path.join(process.cwd(), "public/uploads");
+fs.mkdirSync(uploadDir, { recursive: true });
+
+const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_");
+const filename = `${Date.now()}-${safeName}`;
+
+uploadedFilePath = path.join(uploadDir, filename);
+fs.writeFileSync(uploadedFilePath, file.buffer, { mode: 0o644 });
+
 const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
-const isVideo = false;
+const isVideo = file.mimetype.startsWith("video/");
 
 send("file", {
   status: "success",
   filename,
   url: publicMediaUrl,
-  note: "Using existing server file"
+  type: file.mimetype
 });
 
 
@@ -241,9 +220,12 @@ while (status !== "FINISHED") {
     // ===============================
     // STEP 6 — CLEANUP
     // ===============================
-    if (fs.existsSync(uploadedFilePath)) {
-      fs.unlinkSync(uploadedFilePath);
-    }
+
+    setTimeout(() => {
+      if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+        fs.unlinkSync(uploadedFilePath);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
 
     send("cleanup", { status: "success" });
 
