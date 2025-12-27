@@ -53,93 +53,72 @@ export const getInstagramAccounts = async (req, res) => {
 
 export const postInstagramMedia = async (req, res) => {
   const { caption = "", igId } = req.body;
-  const file = req.file; // from multer
+  const file = req.file;
 
   if (!igId) return res.status(400).json({ error: "No Instagram account selected" });
   if (!file) return res.status(400).json({ error: "Media file required" });
 
   let uploadedFilePath = null;
-  let publicMediaUrl = null;
 
   try {
-    // 1. Load Instagram token
+    // 1. Get token
     const acc = await db.query(
       `SELECT token FROM social_sub_accounts WHERE sub_id = $1 AND type = 'instagram_account'`,
       [igId]
     );
-    if (!acc.rows.length) {
-      return res.status(400).json({ error: "Instagram account not found" });
-    }
+    if (!acc.rows.length) throw new Error("Instagram account not found");
+
     const token = acc.rows[0].token;
 
-    // 2. Save file to server public folder
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
+    // 2. Save file
+    const uploadDir = path.join(process.cwd(), "public/uploads");
+    fs.mkdirSync(uploadDir, { recursive: true });
 
     const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     uploadedFilePath = path.join(uploadDir, filename);
     fs.writeFileSync(uploadedFilePath, file.buffer);
 
-    publicMediaUrl = `https://ucext.com/uploads/${filename}`;
-    console.log("File uploaded to server:", publicMediaUrl);
-
+    const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
     const isVideo = file.mimetype.startsWith("video/");
 
-    // 3. Create Instagram container
-    const createParams = new URLSearchParams({
+    // 3. Create container
+    const params = new URLSearchParams({
       access_token: token,
       caption
     });
 
     if (isVideo) {
-      createParams.append("video_url", publicMediaUrl);
-      createParams.append("media_type", "REELS");
+      params.append("video_url", publicMediaUrl);
+      params.append("media_type", "REELS");
     } else {
-      createParams.append("image_url", publicMediaUrl);
+      params.append("image_url", publicMediaUrl);
     }
 
     const createRes = await fetch(
       `https://graph.facebook.com/v19.0/${igId}/media`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: createParams.toString()
-      }
+      { method: "POST", body: params }
     );
-    const createData = await createRes.json();
 
-    if (!createData.id) {
-      throw new Error(createData.error?.message || "Container creation failed");
-    }
+    const createData = await createRes.json();
+    if (!createData.id) throw new Error(createData.error?.message);
 
     const creationId = createData.id;
-    console.log("Instagram container created:", creationId);
 
-    // 4. Poll until processing finished
+    // 4. Poll status
     let status = "IN_PROGRESS";
-    const startTime = Date.now();
+    const start = Date.now();
+
     while (status !== "FINISHED") {
       await new Promise(r => setTimeout(r, 2000));
 
-      const statusRes = await fetch(
+      const sRes = await fetch(
         `https://graph.facebook.com/v19.0/${creationId}?fields=status_code&access_token=${token}`
       );
-      const statusData = await statusRes.json();
+      const sData = await sRes.json();
 
-      if (statusData.error) {
-        throw new Error(statusData.error.message);
-      }
-      status = statusData.status_code;
-
-      if (status === "ERROR") {
-        throw new Error("Instagram media processing failed");
-      }
-
-      if (Date.now() - startTime > 60000) {
-        throw new Error("Instagram processing timeout");
-      }
+      status = sData.status_code;
+      if (status === "ERROR") throw new Error("Instagram processing failed");
+      if (Date.now() - start > 60000) throw new Error("Instagram timeout");
     }
 
     // 5. Publish
@@ -147,38 +126,26 @@ export const postInstagramMedia = async (req, res) => {
       `https://graph.facebook.com/v19.0/${igId}/media_publish`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           creation_id: creationId,
           access_token: token
-        }).toString()
+        })
       }
     );
+
     const publishData = await publishRes.json();
+    if (publishData.error) throw new Error(publishData.error.message);
 
-    if (publishData.error) {
-      throw new Error(publishData.error.message);
-    }
-
-    console.log("Instagram post published:", publishData.id);
-
-    // 6. Delete file from server
-    if (fs.existsSync(uploadedFilePath)) {
-      fs.unlinkSync(uploadedFilePath);
-      console.log("Temporary file deleted:", filename);
-    }
+    // 6. Cleanup
+    fs.unlinkSync(uploadedFilePath);
 
     res.json(publishData);
-  } catch (err) {
-    console.error("Instagram post error:", err);
 
-    // Clean up file on error
+  } catch (err) {
     if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
       fs.unlinkSync(uploadedFilePath);
-      console.log("Temporary file deleted after error:", uploadedFilePath);
     }
-
-    res.status(500).json({ error: "Server error", message: err.message });
+    res.status(500).json({ error: "Instagram post failed", message: err.message });
   }
 };
 
