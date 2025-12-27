@@ -61,7 +61,6 @@ export const postInstagramMedia = async (req, res) => {
     token: null,
     file: null,
     container: null,
-    processing: [],
     publish: null,
     cleanup: null
   };
@@ -69,29 +68,40 @@ export const postInstagramMedia = async (req, res) => {
   let uploadedFilePath = null;
 
   try {
+    // ===============================
     // STEP 1 — TOKEN
+    // ===============================
     if (!igId) {
-      steps.token = { success: false, error: "No Instagram account selected" };
-      return res.status(400).json({ steps });
+      return res.status(400).json({
+        success: false,
+        error: "No Instagram account selected"
+      });
     }
 
     const acc = await db.query(
-      `SELECT token FROM social_sub_accounts WHERE sub_id = $1 AND type = 'instagram_account'`,
+      `SELECT token FROM social_sub_accounts 
+       WHERE sub_id = $1 AND type = 'instagram_account'`,
       [igId]
     );
 
     if (!acc.rows.length) {
-      steps.token = { success: false, error: "Instagram account not found" };
-      throw new Error("Instagram account not found");
+      return res.status(400).json({
+        success: false,
+        error: "Instagram account not found"
+      });
     }
 
     const token = acc.rows[0].token;
-    steps.token = { success: true, token };
+    steps.token = { success: true };
 
+    // ===============================
     // STEP 2 — FILE SAVE
+    // ===============================
     if (!file) {
-      steps.file = { success: false, error: "Media file required" };
-      throw new Error("Media file required");
+      return res.status(400).json({
+        success: false,
+        error: "Media file required"
+      });
     }
 
     const uploadDir = path.join(process.cwd(), "public/uploads");
@@ -99,8 +109,7 @@ export const postInstagramMedia = async (req, res) => {
 
     const filename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     uploadedFilePath = path.join(uploadDir, filename);
-    // fs.writeFileSync(uploadedFilePath, file.buffer);
-    // In instagramController.js, after writing the file:
+
     fs.writeFileSync(uploadedFilePath, file.buffer, { mode: 0o644 });
 
     const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
@@ -113,13 +122,14 @@ export const postInstagramMedia = async (req, res) => {
       type: file.mimetype
     };
 
+    // ===============================
     // STEP 3 — CREATE CONTAINER
+    // ===============================
     const params = new URLSearchParams({
       access_token: token,
       caption
     });
 
-    // ✅ FIX: Use correct parameter based on media type
     if (isVideo) {
       params.append("media_type", "REELS");
       params.append("video_url", publicMediaUrl);
@@ -136,93 +146,92 @@ export const postInstagramMedia = async (req, res) => {
     const createData = await createRes.json();
 
     if (!createData.id) {
-      steps.container = { success: false, response: createData };
-      throw new Error(createData.error?.message || "Container creation failed");
+      return res.status(500).json({
+        success: false,
+        error: createData.error?.message || "Instagram container creation failed",
+        response: createData
+      });
     }
 
     const creationId = createData.id;
     steps.container = { success: true, creationId };
 
-    // STEP 4 — PROCESSING
-    let status = "IN_PROGRESS";
-    const start = Date.now();
-
-    while (status !== "FINISHED") {
-      await new Promise(r => setTimeout(r, 3000)); // Increased to 3s for videos
-
-      const sRes = await fetch(
-        `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,status,error_message&access_token=${token}`
-      );
-
-      const sData = await sRes.json();
-      status = sData.status_code;
-
-      steps.processing.push({
-        time: new Date().toISOString(),
-        status: sData.status_code,
-        error: sData.error_message || null
-      });
-
-      if (status === "ERROR") {
-        throw new Error(sData.error_message || "Instagram processing failed");
-      }
-
-      // ✅ Increased timeout for videos (120s instead of 60s)
-      if (Date.now() - start > 120000) {
-        throw new Error("Instagram processing timeout");
-      }
-    }
-
-    // STEP 5 — PUBLISH
-    const publishRes = await fetch(
-      `https://graph.facebook.com/v19.0/${igId}/media_publish`,
-      {
-        method: "POST",
-        body: new URLSearchParams({
-          creation_id: creationId,
-          access_token: token
-        })
-      }
-    );
-
-    const publishData = await publishRes.json();
-
-    if (publishData.error) {
-      steps.publish = { success: false, response: publishData };
-      throw new Error(publishData.error.message);
-    }
-
-    steps.publish = {
-      success: true,
-      mediaId: publishData.id
-    };
-
-    // STEP 6 — CLEANUP (Keep file for 5 minutes in case of retry)
-    setTimeout(() => {
-      if (fs.existsSync(uploadedFilePath)) {
-        fs.unlinkSync(uploadedFilePath);
-      }
-    }, 300000); // 5 minutes
-
-    steps.cleanup = { success: true, note: "Scheduled for cleanup" };
-
+    // ===============================
+    // RESPOND IMMEDIATELY (NO BLOCKING)
+    // ===============================
     res.json({
       success: true,
-      steps
+      steps,
+      creationId,
+      note: "Instagram processing started"
     });
 
+    // ===============================
+    // BACKGROUND JOB (PROCESS + PUBLISH)
+    // ===============================
+    (async () => {
+      try {
+        let status = "IN_PROGRESS";
+        const start = Date.now();
+
+        while (status !== "FINISHED") {
+          await new Promise(r => setTimeout(r, 3000));
+
+          const sRes = await fetch(
+            `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,error_message&access_token=${token}`
+          );
+
+          const sData = await sRes.json();
+          status = sData.status_code;
+
+          if (status === "ERROR") {
+            throw new Error(sData.error_message || "Instagram processing failed");
+          }
+
+          if (Date.now() - start > 120000) {
+            throw new Error("Instagram processing timeout");
+          }
+        }
+
+        // ===============================
+        // PUBLISH (ONLY AFTER FINISHED)
+        // ===============================
+        const publishRes = await fetch(
+          `https://graph.facebook.com/v19.0/${igId}/media_publish`,
+          {
+            method: "POST",
+            body: new URLSearchParams({
+              creation_id: creationId,
+              access_token: token
+            })
+          }
+        );
+
+        const publishData = await publishRes.json();
+
+        if (publishData.error) {
+          throw new Error(publishData.error.message);
+        }
+
+        // ===============================
+        // CLEANUP FILE (AFTER SUCCESS)
+        // ===============================
+        setTimeout(() => {
+          if (fs.existsSync(uploadedFilePath)) {
+            fs.unlinkSync(uploadedFilePath);
+          }
+        }, 300000);
+
+      } catch (err) {
+        console.error("Instagram background job failed:", err.message);
+      }
+    })();
+
   } catch (err) {
-    // Cleanup on error
-    /*
-    if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
-      fs.unlinkSync(uploadedFilePath);
-      steps.cleanup = { success: true, note: "Deleted after failure" };
-    }
-*/
+    console.error("Instagram post error:", err.message);
     res.status(500).json({
       success: false,
-      error: err.message,
-      steps
+      error: err.message
     });
   }
 };
