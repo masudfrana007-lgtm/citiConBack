@@ -178,42 +178,34 @@ send("file", {
     const creationId = createData.id;
     send("container", { status: "success", creationId });
 
-    // ===============================
-    // STEP 4 — PROCESSING
-    // ===============================
-    send("processing", { status: "pending" });
+// ===============================
+// STEP 4 — PROCESSING (FIXED)
+// ===============================
+send("processing", { status: "pending" });
 
-    let status = "IN_PROGRESS";
-    const start = Date.now();
+let status = "IN_PROGRESS";
 
-    while (status !== "FINISHED") {
-      await new Promise(r => setTimeout(r, 3000));
+while (status !== "FINISHED") {
+  await new Promise(r => setTimeout(r, 3000));
 
-      const sRes = await fetch(
-        `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,error_message&access_token=${token}`
-      );
+  const sRes = await fetch(
+    `https://graph.facebook.com/v19.0/${creationId}?fields=status_code&access_token=${token}`
+  );
 
-      const sData = await sRes.json();
-      status = sData.status_code;
+  const sData = await sRes.json();
+  status = sData.status_code;
 
-      send("processing", { status });
+  send("processing", { status });
 
-      if (status === "ERROR") {
-        send("processing", {
-          status: "error",
-          error: sData.error_message
-        });
-        return res.end();
-      }
+  if (status === "ERROR") {
+    send("processing", {
+      status: "error",
+      error: "Instagram processing failed"
+    });
+    return res.end();
+  }
+}
 
-      if (Date.now() - start > 1200000) {
-        send("processing", {
-          status: "error",
-          error: "Processing timeout"
-        });
-        return res.end();
-      }
-    }
 
     // ===============================
     // STEP 5 — PUBLISH
