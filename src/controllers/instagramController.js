@@ -110,7 +110,11 @@ uploadedFilePath = path.join(uploadDir, filename);
 fs.writeFileSync(uploadedFilePath, file.buffer, { mode: 0o644 });
 
 const publicMediaUrl = `https://ucext.com/uploads/${filename}`;
-const isVideo = file.mimetype.startsWith("video/");
+const mime = file.mimetype === "application/octet-stream"
+  ? "video/mp4"
+  : file.mimetype;
+
+const isVideo = mime.startsWith("video/");
 
 send("file", {
   status: "success",
