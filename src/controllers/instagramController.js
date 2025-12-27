@@ -51,6 +51,8 @@ export const getInstagramAccounts = async (req, res) => {
 };
 
 
+// ===== BACKEND FIX (instagramController.js) =====
+
 export const postInstagramMedia = async (req, res) => {
   const { caption = "", igId } = req.body;
   const file = req.file;
@@ -115,9 +117,12 @@ export const postInstagramMedia = async (req, res) => {
       caption
     });
 
+    // ✅ FIX: Use correct parameter based on media type
     if (isVideo) {
+      params.append("media_type", "VIDEO");
       params.append("video_url", publicMediaUrl);
     } else {
+      params.append("media_type", "IMAGE");
       params.append("image_url", publicMediaUrl);
     }
 
@@ -141,7 +146,7 @@ export const postInstagramMedia = async (req, res) => {
     const start = Date.now();
 
     while (status !== "FINISHED") {
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 3000)); // Increased to 3s for videos
 
       const sRes = await fetch(
         `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,status,error_message&access_token=${token}`
@@ -160,7 +165,8 @@ export const postInstagramMedia = async (req, res) => {
         throw new Error(sData.error_message || "Instagram processing failed");
       }
 
-      if (Date.now() - start > 60000) {
+      // ✅ Increased timeout for videos (120s instead of 60s)
+      if (Date.now() - start > 120000) {
         throw new Error("Instagram processing timeout");
       }
     }
@@ -189,9 +195,14 @@ export const postInstagramMedia = async (req, res) => {
       mediaId: publishData.id
     };
 
-    // STEP 6 — CLEANUP
-    fs.unlinkSync(uploadedFilePath);
-    steps.cleanup = { success: true };
+    // STEP 6 — CLEANUP (Keep file for 5 minutes in case of retry)
+    setTimeout(() => {
+      if (fs.existsSync(uploadedFilePath)) {
+        fs.unlinkSync(uploadedFilePath);
+      }
+    }, 300000); // 5 minutes
+
+    steps.cleanup = { success: true, note: "Scheduled for cleanup" };
 
     res.json({
       success: true,
@@ -199,6 +210,7 @@ export const postInstagramMedia = async (req, res) => {
     });
 
   } catch (err) {
+    // Cleanup on error
     if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
       fs.unlinkSync(uploadedFilePath);
       steps.cleanup = { success: true, note: "Deleted after failure" };
