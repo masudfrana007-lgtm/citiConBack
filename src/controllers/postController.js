@@ -55,7 +55,7 @@ export const createPostRecord = async (req, res) => {
     division,
     district,
     upazila,
-    union_ward,
+    union,
     platforms = [] // array of { platform, targetId, targetName }
   } = req.body;
 
@@ -77,7 +77,7 @@ export const createPostRecord = async (req, res) => {
         division || null,
         district || null,
         upazila || null,
-        union_ward || null,
+        union || null,
       ]
     );
 
