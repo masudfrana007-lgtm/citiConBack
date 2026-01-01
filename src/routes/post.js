@@ -15,6 +15,6 @@ const upload = multer({ dest: "tmp/" });
 router.post("/", upload.single("file"), handlePost);
 router.post("/save", createPostRecord);           // Called once at start
 router.post("/platform/update", updatePlatformStatus); // Called after each platform
-router.get("/", showPosts);
+router.get("/posts", showPosts);
 
 export default router;
