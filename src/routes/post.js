@@ -4,6 +4,7 @@ import {
   handlePost,
   createPostRecord,
   updatePlatformStatus,
+  showPosts,
 } from "../controllers/postController.js";
 
 const router = express.Router();
@@ -14,5 +15,6 @@ const upload = multer({ dest: "tmp/" });
 router.post("/", upload.single("file"), handlePost);
 router.post("/save", createPostRecord);           // Called once at start
 router.post("/platform/update", updatePlatformStatus); // Called after each platform
+router.get("/", showPosts);
 
 export default router;

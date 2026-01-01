@@ -145,3 +145,57 @@ export const updatePlatformStatus = async (req, res) => {
     res.status(500).json({ error: "Failed to update status" });
   }
 };
+
+// ────────────────────────────────
+// NEW: Show all posts with platform details
+// ────────────────────────────────
+export const showPosts = async (req, res) => {
+  const userId = req.session.user_id;
+
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const result = await db.query(
+      `SELECT 
+         p.id,
+         p.title,
+         p.content,
+         p.media_url,
+         p.media_type,
+         p.original_filename,
+         p.division,
+         p.district,
+         p.upazila,
+         p.union_ward,
+         p.status AS post_status,
+         p.created_at,
+         COALESCE(
+           json_agg(
+             json_build_object(
+               'id', pp.id,
+               'platform', pp.platform,
+               'target_name', pp.target_name,
+               'status', pp.status,
+               'external_post_id', pp.external_post_id,
+               'permalink', pp.permalink,
+               'error_message', pp.error_message
+             )
+           ) FILTER (WHERE pp.id IS NOT NULL),
+           '[]'
+         ) AS platforms
+       FROM posts p
+       LEFT JOIN post_platforms pp ON p.id = pp.post_id
+       WHERE p.user_id = $1
+       GROUP BY p.id
+       ORDER BY p.created_at DESC`,
+      [userId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("showPosts error:", err);
+    res.status(500).json({ error: "Failed to load posts" });
+  }
+};
