@@ -66,11 +66,11 @@ export const linkedinCallback = async (req, res) => {
 
     /* 2️⃣ Get LinkedIn member */
     const meRes = await axios.get(
-      "https://api.linkedin.com/v2/userinfo",
+      "https://api.linkedin.com/v2/me",
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
 
-    const linkedinUserId = meRes.data.sub;
+    const linkedinUserId = meRes.data.id;
 
     /* 3️⃣ Upsert social account (SAME AS FACEBOOK) */
     await db.query(
