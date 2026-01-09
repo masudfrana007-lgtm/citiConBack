@@ -13,6 +13,12 @@ export const linkedinConnect = (req, res) => {
     return res.status(401).send("Login required");
   }
 
+  // ✅ ADD THIS LOG HERE
+  console.log(
+    "LINKEDIN CONNECT → redirect_uri:",
+    process.env.LINKEDIN_REDIRECT_URI
+  );
+
   const state = crypto.randomBytes(16).toString("hex");
   req.session.linkedin_state = state;
 
@@ -86,8 +92,11 @@ export const linkedinCallback = async (req, res) => {
     `);
 
   } catch (err) {
-    console.error("LinkedIn OAuth error:", err.response?.data || err.message);
-    res.status(500).send("LinkedIn authentication failed");
+    console.error("🔴 LinkedIn OAuth ERROR STATUS:", err.response?.status);
+    console.error("🔴 LinkedIn OAuth ERROR HEADERS:", err.response?.headers);
+    console.error("🔴 LinkedIn OAuth ERROR DATA:", err.response?.data);
+    console.error("🔴 LinkedIn OAuth ERROR MESSAGE:", err.message);
+    res.status(500).send("LinkedIn authentication failed");      
   }
 };
 
