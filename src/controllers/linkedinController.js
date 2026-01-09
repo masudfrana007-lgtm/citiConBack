@@ -145,25 +145,18 @@ export const postToLinkedin = async (req, res) => {
 
   try {
     const response = await axios.post(
-      "https://api.linkedin.com/v2/ugcPosts",
+      "https://api.linkedin.com/rest/posts",
       {
-        author,
-        lifecycleState: "PUBLISHED",
-        specificContent: {
-          "com.linkedin.ugc.ShareContent": {
-            shareCommentary: { text: message },
-            shareMediaCategory: "NONE"
-          }
-        },
-        visibility: {
-          "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-        }
+        author: author,
+        commentary: message,
+        visibility: "PUBLIC"
       },
       {
         headers: {
           Authorization: `Bearer ${access_token}`,
           "Content-Type": "application/json",
-          "X-Restli-Protocol-Version": "2.0.0"
+          "X-Restli-Protocol-Version": "2.0.0",
+          "LinkedIn-Version": "202401"
         }
       }
     );
