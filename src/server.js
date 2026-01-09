@@ -17,6 +17,7 @@ import youtubeRoutes from "./routes/youtube.js";
 import instagramRoutes from "./routes/instagram.js";
 import linkedinRoutes from "./routes/linkedin.js";
 import xRoutes from "./routes/x.js";
+import mediaProxy from "./routes/mediaProxy.js";
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use("/auth/youtube", youtubeRoutes);
 app.use("/auth/instagram", instagramRoutes);
 app.use("/auth/linkedin", linkedinRoutes);
 app.use("/auth/x", xRoutes);
+app.use("/media", mediaProxy);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
