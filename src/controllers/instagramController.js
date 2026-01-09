@@ -216,10 +216,31 @@ while (status !== "FINISHED") {
       return res.end();
     }
 
-    send("publish", {
-      status: "success",
-      mediaId: publishData.id
-    });
+const mediaId = publishData.id;
+
+// ===============================
+// 🔥 NEW — FETCH PERMALINK
+// ===============================
+let permalink = null;
+
+try {
+  const permalinkRes = await fetch(
+    `https://graph.facebook.com/v19.0/${mediaId}?fields=permalink&access_token=${token}`
+  );
+  const permalinkData = await permalinkRes.json();
+  permalink = permalinkData.permalink || null;
+} catch (e) {
+  console.warn("Failed to fetch Instagram permalink:", e.message);
+}
+
+// ===============================
+// ✅ SEND CORRECT SSE PAYLOAD
+// ===============================
+send("publish", {
+  status: "success",
+  media_id: mediaId,     // ✅ snake_case (frontend expects this)
+  permalink              // ✅ now exists
+});
 
     // ===============================
     // STEP 6 — CLEANUP
